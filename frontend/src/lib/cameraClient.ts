@@ -11,7 +11,7 @@ export interface CameraClientOptions {
 const DEFAULTS = {
   width:   1920,
   height:  1080,
-  fps:     2,
+  fps:     16,
   quality: 0.8,
 } as const;
 
@@ -37,9 +37,10 @@ export class CameraClient {
    * The canvas is sized from the track's real resolution rather than a fixed
    * 640x360. A back-row face at 1080p is ~40-60px across; downscaling to 360p
    * puts it under the detector's floor entirely, and an undetected student is
-   * dropped from the metric rather than counted as disengaged. The frame rate
-   * drops to compensate for the larger payload — attention is read over
-   * multi-second windows, so 2 FPS loses nothing.
+   * dropped from the metric rather than counted as disengaged. Resolution is
+   * kept high for detector coverage; fps is set for a live-feeling video
+   * preview rather than the engagement metric itself, which is read over
+   * multi-second windows and gains nothing from the extra frames.
    */
   async start(options: CameraClientOptions = {}): Promise<void> {
     const { width, height, fps, quality } = { ...DEFAULTS, ...options };
