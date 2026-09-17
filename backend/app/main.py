@@ -3,6 +3,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
 
 from .config import settings
@@ -54,6 +55,12 @@ app.include_router(feedback.router,   prefix="/api/eval",       tags=["Eval"])
 # WebSocket routers
 app.include_router(video_receiver.router)
 app.include_router(dashboard_push.router)
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    # The API has no page of its own; opening the bare URL used to 404.
+    return RedirectResponse("/docs")
 
 
 @app.get("/health", tags=["Health"])
