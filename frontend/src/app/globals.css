@@ -3,43 +3,88 @@
 @tailwind utilities;
 
 :root {
-  --color-bg:       #030712;
-  --color-surface:  #111827;
-  --color-border:   #1f2937;
-  --color-accent:   #6366f1;
-  --color-success:  #22c55e;
-  --color-warning:  #f59e0b;
-  --color-danger:   #ef4444;
+  --color-bg:        #08090c;
+  --color-surface:   #101216;
+  --color-surface-2: #15171c;
+  --color-border:    #22252b;
+  --color-text:      #f4f5f7;
+  --color-muted:     #9599a3;
+  --color-faint:     #5b5f6b;
+  --color-accent:    #6d7bfa;
+  --color-accent-dim: rgba(109, 123, 250, 0.12);
+  --color-success:   #3ecf8e;
+  --color-warning:   #e8a33d;
+  --color-danger:    #ef5f6b;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: dark;
+}
+
 body {
   background-color: var(--color-bg);
-  color: #f9fafb;
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-accent-dim);
+  color: var(--color-text);
 }
 
 /* Scrollbar */
-::-webkit-scrollbar       { width: 6px; }
-::-webkit-scrollbar-track { background: #111827; }
-::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+::-webkit-scrollbar       { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2d34; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #363943; }
 
-/* Smooth transitions */
+/* Shared surface treatment — one elevation language across the app */
+.surface {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.surface-quiet {
+  background-color: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
 .transition-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease;
 }
 .transition-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(99, 102, 241, 0.15);
+  border-color: #2c2f37;
+  transform: translateY(-1px);
 }
 
-/* Pulsing dot animation */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Pulsing dot animation — used sparingly, for genuinely live signals only */
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
+  50%       { opacity: 0.35; }
 }
 .animate-pulse-dot {
-  animation: pulse-dot 1.5s ease-in-out infinite;
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
 }

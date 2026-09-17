@@ -3,10 +3,10 @@ import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recha
 import { LiveMetrics } from '@/lib/types';
 
 const STATE_COLORS: Record<string, string> = {
-  on_task:   '#22c55e',
-  desk_work: '#60a5fa',
-  off_task:  '#f59e0b',
-  unknown:   '#6b7280',
+  on_task:   '#3ecf8e',
+  desk_work: '#6d9bfa',
+  off_task:  '#e8a33d',
+  unknown:   '#4b4f58',
 };
 
 const STATE_LABELS: Record<string, string> = {
@@ -24,7 +24,7 @@ export function AttentionBreakdown({ counts }: Props) {
   if (!counts) {
     return (
       <div className="h-44 flex items-center justify-center text-gray-600 text-sm">
-        Waiting for data...
+        Waiting for data…
       </div>
     );
   }
@@ -49,7 +49,7 @@ export function AttentionBreakdown({ counts }: Props) {
           dataKey="value"
           nameKey="name"
           cx="50%" cy="50%"
-          outerRadius={65}
+          outerRadius={64}
           innerRadius={40}
           paddingAngle={3}
           stroke="none"
@@ -57,15 +57,16 @@ export function AttentionBreakdown({ counts }: Props) {
           {data.map((entry) => (
             <Cell
               key={entry.name}
-              fill={STATE_COLORS[entry.name] ?? '#6b7280'}
+              fill={STATE_COLORS[entry.name] ?? '#4b4f58'}
             />
           ))}
         </Pie>
         <Tooltip
-          contentStyle={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: 8 }}
+          contentStyle={{ backgroundColor: '#15171c', border: '1px solid #22252b', borderRadius: 10, fontSize: 12 }}
           formatter={(v: number, name: string) => [v, STATE_LABELS[name] ?? name]}
         />
         <Legend
+          iconSize={8}
           formatter={(value) => (
             <span className="text-xs text-gray-400">{STATE_LABELS[value] ?? value}</span>
           )}

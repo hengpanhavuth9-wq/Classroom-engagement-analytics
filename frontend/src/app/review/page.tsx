@@ -125,11 +125,11 @@ export default function ReviewPage() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center gap-4">
-        <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-          <ArrowLeft className="w-5 h-5" />
+      <header className="border-b border-[#181a1f] px-6 py-4 flex items-center gap-4">
+        <Link href="/" className="text-gray-500 hover:text-gray-300 transition-colors">
+          <ArrowLeft className="w-4.5 h-4.5" />
         </Link>
-        <h1 className="text-lg font-bold">Review a lesson recording</h1>
+        <h1 className="text-[15px] font-semibold tracking-tight">ReLi <span className="text-gray-600 font-normal">/ Review a recording</span></h1>
       </header>
 
       <div className="p-6 max-w-5xl mx-auto space-y-6">

@@ -13,11 +13,11 @@ import { SessionSetup }        from '@/components/ui/SessionSetup';
 import { LiveMetrics, FaceOverlay, AttentionState } from '@/lib/types';
 import { CameraClient }        from '@/lib/cameraClient';
 import Link from 'next/link';
-import { ArrowLeft, Zap, Camera, CameraOff, Crosshair } from 'lucide-react';
+import { ArrowLeft, Zap, Camera, CameraOff, Crosshair, AlertCircle } from 'lucide-react';
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000';
 
-// ── Demo data simulator ──────────────────────────────────────────────────────
+// ── Demo data simulator ───────────────────────────────────────────────────────────
 function makeDemoMetrics(tick: number): LiveMetrics {
   const base  = 68 + Math.sin(tick / 8) * 15 + (Math.random() - 0.5) * 8;
   const eng   = Math.max(20, Math.min(98, base));
@@ -95,7 +95,7 @@ export default function TeacherDashboard() {
   // Wire the gaze overlay canvas
   useGazeOverlay(canvasRef, videoEl, currentFaces);
 
-  // ── Demo simulator ──────────────────────────────────────────────────────
+  // ── Demo simulator ────────────────────────────────────────────
   useEffect(() => {
     if (!demoMode) return;
     const id = setInterval(() => {
@@ -107,15 +107,20 @@ export default function TeacherDashboard() {
     return () => clearInterval(id);
   }, [demoMode]);
 
-  // ── Camera start ────────────────────────────────────────────────────────
+  // ── Camera start ────────────────────────────────────────────────
   const startCamera = useCallback(async (sid: string) => {
     setCameraError(null);
     try {
-      const client = new CameraClient(sid, WS_BASE);
+      // Pipeline failures (missing weights, unauthorized, a dropped socket)
+      // surface here instead of leaving the "Camera + AI active" badge lying.
+      const client = new CameraClient(sid, WS_BASE, (message) => {
+        setCameraError(message);
+        setCameraActive(false);
+      });
       cameraRef.current = client;
       await client.start();
       const videoEl        = client.getVideoElement();
-      videoEl.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:12px;';
+      videoEl.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:16px;';
       setVideoEl(videoEl);
       if (videoContRef.current) {
         videoContRef.current.innerHTML = '';
@@ -138,7 +143,7 @@ export default function TeacherDashboard() {
 
   const calibrate = useCallback(() => cameraRef.current?.calibrate(), []);
 
-  // ── Session handlers ────────────────────────────────────────────────────
+  // ── Session handlers ───────────────────────────────────────────
   const handleStart = async (classroomId: string, teacher: string, subject: string) => {
     if (classroomId.startsWith('demo-')) { setDemoMode(true); setShowSetup(false); return; }
     const id = await startSession(classroomId, teacher, subject);
@@ -161,27 +166,27 @@ export default function TeacherDashboard() {
   return (
     <main className="min-h-screen bg-gray-950 text-white">
       {/* ── Header ── */}
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      <header className="border-b border-[#181a1f] px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-5 h-5" />
+          <Link href="/" className="text-gray-500 hover:text-gray-300 transition-colors">
+            <ArrowLeft className="w-4.5 h-4.5" />
           </Link>
-          <h1 className="text-lg font-bold">ReLi — Teacher Dashboard</h1>
-          <div className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-500'}`} />
-            <span className="text-xs text-gray-400">
-              {demoMode ? 'Demo (simulated)' : connected ? 'Live' : 'Reconnecting…'}
+          <h1 className="text-[15px] font-semibold tracking-tight">ReLi <span className="text-gray-600 font-normal">/ Teacher</span></h1>
+          <div className="flex items-center gap-1.5 pl-1">
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse-dot' : 'bg-red-500'}`} />
+            <span className="text-xs text-gray-500">
+              {demoMode ? 'Demo · simulated' : connected ? 'Live' : 'Reconnecting…'}
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {demoMode && (
-            <span className="flex items-center gap-1.5 text-indigo-400 text-xs bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-full">
-              <Zap className="w-3 h-3" /> Demo Mode
+            <span className="flex items-center gap-1.5 text-indigo-300 text-xs bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-full">
+              <Zap className="w-3 h-3" /> Demo mode
             </span>
           )}
           {!demoMode && (
-            <span className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border ${cameraActive ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-gray-500 bg-gray-800 border-gray-700'}`}>
+            <span className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border ${cameraActive ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-gray-500 bg-[#15171c] border-[#22252b]'}`}>
               {cameraActive ? <Camera className="w-3 h-3" /> : <CameraOff className="w-3 h-3" />}
               {cameraActive ? 'Camera + AI active' : 'No camera'}
             </span>
@@ -190,37 +195,37 @@ export default function TeacherDashboard() {
             <button
               onClick={calibrate}
               disabled={!cameraActive}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 disabled:opacity-40 disabled:hover:bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-lg text-sm font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/15 disabled:opacity-40 disabled:hover:bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-[8px] text-xs font-medium transition-colors"
             >
               <Crosshair className="w-3.5 h-3.5" />
               Calibrate
             </button>
           )}
-          <button onClick={handleEnd} className="px-4 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-sm font-medium transition-colors">
-            End Session
+          <button onClick={handleEnd} className="px-3.5 py-1.5 bg-red-500/10 hover:bg-red-500/15 text-red-400 border border-red-500/20 rounded-[8px] text-xs font-medium transition-colors">
+            End session
           </button>
         </div>
       </header>
 
-      <div className="p-6 space-y-5">
+      <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
         {alerts[0] && <AlertBanner alert={alerts[0]} />}
 
         {cameraError && (
-          <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm">
-            <CameraOff className="w-4 h-4 shrink-0" />
+          <div className="animate-fade-in flex items-center gap-3 bg-red-500/[0.07] border border-red-500/20 rounded-[14px] px-4 py-3 text-red-300 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             {cameraError}
           </div>
         )}
 
         {liveMetrics?.is_calibrating && (
-          <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3 text-indigo-300 text-sm">
+          <div className="flex items-center gap-3 bg-indigo-500/[0.07] border border-indigo-500/20 rounded-[14px] px-4 py-3 text-indigo-300 text-sm">
             <Crosshair className="w-4 h-4 shrink-0 animate-pulse" />
             Calibrating — ask everyone to look at the board until this clears.
           </div>
         )}
 
         {liveMetrics && !liveMetrics.gaze_model_loaded && (
-          <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-3 text-yellow-300 text-sm">
+          <div className="flex items-center gap-3 bg-amber-500/[0.07] border border-amber-500/20 rounded-[14px] px-4 py-3 text-amber-300 text-sm">
             Eye-gaze model not loaded — running on head pose alone.
           </div>
         )}
@@ -229,11 +234,11 @@ export default function TeacherDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
           {/* Camera Preview with canvas overlay */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden relative" style={{ minHeight: 240 }}>
-            <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 bg-gray-950/70 backdrop-blur px-2.5 py-1 rounded-lg">
-              <span className={`w-1.5 h-1.5 rounded-full ${cameraActive || demoMode ? 'bg-green-400 animate-pulse' : 'bg-gray-600'}`} />
+          <div className="surface overflow-hidden relative" style={{ minHeight: 260 }}>
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 bg-black/50 backdrop-blur px-2.5 py-1 rounded-full">
+              <span className={`w-1.5 h-1.5 rounded-full ${cameraActive || demoMode ? 'bg-emerald-400 animate-pulse-dot' : 'bg-gray-600'}`} />
               <span className="text-xs text-gray-300">
-                {demoMode ? 'Demo · AI Overlay' : cameraActive ? 'Live · Gaze Tracking' : 'No Camera'}
+                {demoMode ? 'Demo · AI overlay' : cameraActive ? 'Live · Gaze tracking' : 'No camera'}
               </span>
             </div>
 
@@ -244,27 +249,33 @@ export default function TeacherDashboard() {
             <canvas
               ref={canvasRef}
               className="absolute inset-0 w-full h-full pointer-events-none z-10"
-              style={{ borderRadius: 12 }}
+              style={{ borderRadius: 16 }}
             />
 
             {/* Demo static placeholder (canvas draws over this) */}
             {demoMode && (
-              <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
+              <div className="absolute inset-0 bg-[#0c0d10] flex items-center justify-center">
                 <div className="grid grid-cols-3 gap-4 p-4">
                   {Array.from({ length: 6 }, (_, i) => (
-                    <div key={i} className="w-16 h-20 rounded-lg bg-gray-800 border border-gray-700 flex flex-col items-center justify-center gap-1">
-                      <div className="w-8 h-8 rounded-full bg-indigo-500/30 border border-indigo-500/40" />
-                      <div className="w-10 h-3 rounded bg-gray-700" />
+                    <div key={i} className="w-16 h-20 rounded-[10px] bg-[#15171c] border border-[#22252b] flex flex-col items-center justify-center gap-1">
+                      <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30" />
+                      <div className="w-10 h-2.5 rounded bg-[#22252b]" />
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {!demoMode && !cameraActive && (
+            {!demoMode && !cameraActive && !cameraError && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                <Camera className="w-8 h-8 text-gray-700" />
+                <Camera className="w-7 h-7 text-gray-700" />
                 <p className="text-xs text-gray-600">Starting camera…</p>
+              </div>
+            )}
+            {!demoMode && !cameraActive && cameraError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                <CameraOff className="w-7 h-7 text-gray-700" />
+                <p className="text-xs text-gray-600">Camera stopped</p>
               </div>
             )}
 
@@ -272,49 +283,49 @@ export default function TeacherDashboard() {
             {(cameraActive || demoMode) && currentFaces.length > 0 && (
               <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-1">
                 {([
-                  ['bg-green-400', 'On task'],
-                  ['bg-blue-400',  'Desk work'],
-                  ['bg-red-400',   'Off task'],
-                  ['bg-gray-400',  'Unknown (not scored)'],
+                  ['bg-emerald-400', 'On task'],
+                  ['bg-blue-400',    'Desk work'],
+                  ['bg-amber-400',   'Off task'],
+                  ['bg-gray-500',    'Unknown (not scored)'],
                 ] as const).map(([dot, label]) => (
-                  <div key={label} className="flex items-center gap-1.5 bg-gray-950/70 backdrop-blur px-2 py-1 rounded-md">
-                    <span className={`w-2 h-2 rounded-full ${dot}`} />
+                  <div key={label} className="flex items-center gap-1.5 bg-black/50 backdrop-blur px-2 py-1 rounded-md">
+                    <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
                     <span className="text-[10px] text-gray-300">{label}</span>
                   </div>
                 ))}
-                <div className="flex items-center gap-1.5 bg-gray-950/70 backdrop-blur px-2 py-1 rounded-md">
-                  <span className="text-[10px] text-gray-300">→ Arrow = deviation from reference</span>
+                <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur px-2 py-1 rounded-md">
+                  <span className="text-[10px] text-gray-400">→ arrow = deviation from reference</span>
                 </div>
               </div>
             )}
           </div>
 
           {/* KPI Cards */}
-          <div className="lg:col-span-2 grid grid-cols-2 gap-4 content-start">
-            <KPICard label="Students Detected"  value={liveMetrics?.detected_count ?? '—'} />
-            <KPICard label="Engaged Students"   value={liveMetrics ? `${liveMetrics.engaged_count}/${liveMetrics.tracked_count}` : '—'} accent="green" />
-            <KPICard label="Tracked / Detected" value={liveMetrics ? `${liveMetrics.tracked_count}/${liveMetrics.student_count}` : '—'} accent="yellow" />
-            <KPICard label="Class Engagement"   value={liveMetrics ? `${liveMetrics.class_engagement.toFixed(0)}%` : '—'} accent="indigo" />
+          <div className="lg:col-span-2 grid grid-cols-2 gap-3.5 content-start">
+            <KPICard label="Students detected"  value={liveMetrics?.detected_count ?? '—'} />
+            <KPICard label="Engaged students"   value={liveMetrics ? `${liveMetrics.engaged_count}/${liveMetrics.tracked_count}` : '—'} accent="green" />
+            <KPICard label="Tracked / detected" value={liveMetrics ? `${liveMetrics.tracked_count}/${liveMetrics.student_count}` : '—'} accent="yellow" hint="Coverage — not all detected faces have enough history yet" />
+            <KPICard label="Class engagement"   value={liveMetrics ? `${liveMetrics.class_engagement.toFixed(0)}%` : '—'} accent="indigo" hint="20s rolling average" />
           </div>
         </div>
 
         {/* ── Charts ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Class Engagement</h2>
+          <div className="surface p-6">
+            <h2 className="text-[11px] font-medium text-gray-500 uppercase tracking-[0.08em] mb-4">Class engagement</h2>
             <EngagementGauge value={liveMetrics?.class_engagement ?? 0} />
           </div>
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Attention Breakdown</h2>
+          <div className="surface p-6">
+            <h2 className="text-[11px] font-medium text-gray-500 uppercase tracking-[0.08em] mb-4">Attention breakdown</h2>
             <AttentionBreakdown counts={liveMetrics?.state_counts} />
           </div>
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Engagement Timeline</h2>
+          <div className="surface p-6">
+            <h2 className="text-[11px] font-medium text-gray-500 uppercase tracking-[0.08em] mb-4">Engagement timeline</h2>
             <TimelineLine data={liveHistory} />
           </div>
         </div>
 
-        <p className="text-xs text-gray-600 text-center">
+        <p className="text-xs text-gray-600 text-center pt-1">
           {demoMode ? 'Session: demo (simulated · gaze overlay active)' : `Session ID: ${sessionId}`}
         </p>
       </div>

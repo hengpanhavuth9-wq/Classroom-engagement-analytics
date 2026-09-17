@@ -1,14 +1,24 @@
 import type { RatingConfidence, SegmentRating } from './types';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const BASE  = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+// Shared dev token — see backend/app/api/security.py. A real deployment
+// replaces this with a per-teacher session, not a single shared secret.
+const TOKEN = process.env.NEXT_PUBLIC_API_TOKEN ?? '';
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+    },
     ...options,
   });
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
   return res.json() as Promise<T>;
+}
+
+export function wsToken(): string {
+  return TOKEN;
 }
 
 export const api = {

@@ -13,7 +13,7 @@ export function TimelineLine({ data }: Props) {
   if (data.length === 0) {
     return (
       <div className="h-44 flex items-center justify-center text-gray-600 text-sm">
-        Timeline will appear here...
+        Timeline will appear here…
       </div>
     );
   }
@@ -28,19 +28,21 @@ export function TimelineLine({ data }: Props) {
 
   return (
     <ResponsiveContainer width="100%" height={180}>
-      <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+      <LineChart data={chartData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1b1d22" vertical={false} />
         <XAxis dataKey="index" hide />
-        <YAxis domain={[0, 100]} stroke="#4b5563" tick={{ fill: '#6b7280', fontSize: 11 }} unit="%" />
+        <YAxis domain={[0, 100]} stroke="#3a3d45" tick={{ fill: '#5b5f6b', fontSize: 11 }} unit="%" />
         <Tooltip
-          contentStyle={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: 8 }}
+          contentStyle={{ backgroundColor: '#15171c', border: '1px solid #22252b', borderRadius: 10, fontSize: 12 }}
+          labelFormatter={() => ''}
           formatter={(v: number) => [`${v.toFixed(1)}%`, 'Engagement']}
         />
-        <ReferenceLine y={50} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.5} />
+        <ReferenceLine y={50} stroke="#ef5f6b" strokeDasharray="4 4" strokeOpacity={0.4} />
         <Line
           type="monotone" dataKey="engagement"
-          stroke="#6366f1" strokeWidth={2} dot={false}
-          activeDot={{ r: 4, fill: '#6366f1' }}
+          stroke="#6d7bfa" strokeWidth={2} dot={false}
+          activeDot={{ r: 4, fill: '#6d7bfa' }}
+          isAnimationActive={false}
         />
       </LineChart>
     </ResponsiveContainer>

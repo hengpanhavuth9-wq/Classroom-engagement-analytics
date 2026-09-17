@@ -3,10 +3,10 @@ import { useEffect, useRef } from 'react';
 import { AttentionState, FaceOverlay } from '@/lib/types';
 
 const STATE_COLORS: Record<AttentionState, string> = {
-  on_task:   '#4ade80',
-  desk_work: '#60a5fa',
-  off_task:  '#f87171',
-  unknown:   '#9ca3af',
+  on_task:   '#3ecf8e',
+  desk_work: '#6d9bfa',
+  off_task:  '#e8a33d',
+  unknown:   '#8b8f99',
 };
 
 const STATE_LABELS: Record<AttentionState, string> = {
@@ -92,7 +92,7 @@ export function useGazeOverlay(
 
         const color = STATE_COLORS[face.state] ?? STATE_COLORS.unknown;
 
-        // ── Bounding box ──────────────────────────────────────────────────────
+        // ── Bounding box ───────────────────────────────────────────────
         ctx.strokeStyle = color;
         ctx.lineWidth   = 2;
         ctx.setLineDash(face.measured ? [] : [5, 4]);
@@ -115,10 +115,10 @@ export function useGazeOverlay(
           }
         );
 
-        // ── Deviation arrow ───────────────────────────────────────────────────
+        // ── Deviation arrow ─────────────────────────────────────────────
         drawArrow(ctx, cx, cy, face.yaw, face.pitch, Math.min(bw, bh) * 0.6, color);
 
-        // ── Labels ────────────────────────────────────────────────────────────
+        // ── Labels ────────────────────────────────────────────────────
         const ratioStr = face.on_task_ratio === null
           ? '—'
           : `${Math.round(face.on_task_ratio * 100)}%`;
