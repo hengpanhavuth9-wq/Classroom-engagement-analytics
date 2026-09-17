@@ -7,6 +7,18 @@ _redis_client = None
 METRICS_TTL_SECONDS = 60 * 60
 
 
+def session_channel(session_id: str) -> str:
+    """
+    The one pub/sub channel a session's metrics AND alerts go out on.
+
+    Used by both `publish_metrics` and `alert_service.check_and_fire_alerts`
+    so the two can never drift apart the way they did before (metrics on
+    `channel:session:{id}`, alerts on `alerts:{id}` — the dashboard only ever
+    subscribed to the first, so alerts were silently dropped).
+    """
+    return f"channel:session:{session_id}"
+
+
 async def init_redis() -> None:
     global _redis_client
 
@@ -43,7 +55,7 @@ async def get_redis():
 
 async def publish_metrics(redis, session_id: str, metrics: dict) -> None:
     key     = f"session:{session_id}:live"
-    channel = f"channel:session:{session_id}"
+    channel = session_channel(session_id)
     payload = json.dumps(metrics)
     await redis.setex(key, METRICS_TTL_SECONDS, payload)
     await redis.publish(channel, payload)
@@ -56,8 +68,16 @@ async def get_latest_metrics(redis, session_id: str) -> dict | None:
 
 async def subscribe_metrics(session_id: str) -> AsyncGenerator[str, None]:
     subscriber = _redis_client.pubsub()
-    channel    = f"channel:session:{session_id}"
+    channel    = session_channel(session_id)
     await subscriber.subscribe(channel)
-    async for message in subscriber.listen():
-        if message["type"] == "message":
-            yield message["data"]
+    try:
+        async for message in subscriber.listen():
+            if message["type"] == "message":
+                yield message["data"]
+    finally:
+        # Runs on GeneratorExit too (the dashboard socket disconnecting
+        # breaks the consuming `async for`), so a dead dashboard's queue
+        # stops being fed 16x/sec and its pub/sub connection is released.
+        await subscriber.unsubscribe(channel)
+        close = getattr(subscriber, "aclose", None) or subscriber.close
+        await close()

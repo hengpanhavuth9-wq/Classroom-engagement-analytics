@@ -17,6 +17,20 @@ class InMemoryPubSub:
         self._channel = channel
         self._store._subscribers.setdefault(channel, []).append(self._queue)
 
+    async def unsubscribe(self, channel: str | None = None) -> None:
+        """Drop this queue from the channel's subscriber list.
+
+        Without this, a disconnected dashboard's queue stayed registered
+        forever — every subsequent frame's metrics kept getting enqueued to
+        it, unread, for the life of the process.
+        """
+        queues = self._store._subscribers.get(channel or self._channel)
+        if queues and self._queue in queues:
+            queues.remove(self._queue)
+
+    async def aclose(self) -> None:
+        await self.unsubscribe()
+
     async def listen(self):
         while True:
             data = await self._queue.get()

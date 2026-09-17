@@ -16,6 +16,12 @@ Checks, over detections the extract stage matched to a human label:
      down relative to students looking at the board.
   2. `off_board` yaw spreads wider than `on_board` yaw — turning away shows up
      as larger yaw magnitude.
+  3. (informational) on detections where both head pose and eye gaze were
+     measured, do the two axes correlate positively? `engagement_engine.py`
+     blends them as a weighted average (GAZE_YAW_SIGN / GAZE_PITCH_SIGN in
+     config.py, both currently +1.0, unverified) — if they're anti-correlated,
+     gaze is fighting head pose instead of refining it, and one of those
+     settings should be -1.0.
 
 Prints the medians and a PASS / FAIL. Non-zero exit on FAIL.
 """
@@ -39,8 +45,15 @@ def main() -> int:
 
     pitch: dict[str, list[float]] = {"on_board": [], "desk_work": []}
     yaw_abs: dict[str, list[float]] = {"on_board": [], "off_board": []}
+    pose_yaw: list[float] = []
+    gaze_yaw: list[float] = []
+    pose_pitch: list[float] = []
+    gaze_pitch: list[float] = []
     for line in open(args.jsonl, encoding="utf-8"):
         record = Record.from_json(line)
+        if record.detected and record.pose is not None and record.gaze is not None:
+            pose_yaw.append(record.pose[0]);   gaze_yaw.append(record.gaze[0])
+            pose_pitch.append(record.pose[1]); gaze_pitch.append(record.gaze[1])
         if not record.detected or record.pose is None or record.truth is None:
             continue
         yaw, p = record.pose[0], record.pose[1]
@@ -68,11 +81,27 @@ def main() -> int:
     else:
         print("|yaw|  not enough off_board samples — skipped")
 
+    _print_gaze_agreement("yaw",   pose_yaw,   gaze_yaw)
+    _print_gaze_agreement("pitch", pose_pitch, gaze_pitch)
+
     if pitch_ok and yaw_ok:
         print("PASS — sign convention looks right")
         return 0
     print("FAIL — head-pose signs may be flipped; do not tune on this cache")
     return 1
+
+
+def _print_gaze_agreement(axis: str, pose: list[float], gaze: list[float]) -> None:
+    if len(pose) < 10:
+        print(f"gaze vs head-pose ({axis})  not enough paired samples — skipped")
+        return
+    try:
+        r = statistics.correlation(pose, gaze)
+    except statistics.StatisticsError:
+        print(f"gaze vs head-pose ({axis})  no variance in the sample — skipped")
+        return
+    verdict = "agree" if r > 0 else "DISAGREE — consider GAZE_{}_SIGN = -1.0".format(axis.upper())
+    print(f"gaze vs head-pose ({axis})  r={r:+.2f} over {len(pose)} paired samples  ({verdict})")
 
 
 if __name__ == "__main__":

@@ -59,6 +59,13 @@ class AttentionConfig:
     window_seconds: float = 20.0
     on_task_floor: float = 0.5
     gaze_blend_weight: float = 0.3
+    # gaze_onnx.py documents no sign convention of its own (unlike head_pose.py,
+    # which fixes one and flags it TODO-unverified). If eval/verify_pose_signs.py
+    # — extended to also compare gaze against head pose on the same detections
+    # — shows they disagree, flip the matching value to -1.0 here rather than
+    # guessing; a wrong sign makes gaze fight head pose instead of refining it.
+    gaze_yaw_sign: float = 1.0
+    gaze_pitch_sign: float = 1.0
     min_face_px: int = 24
     min_face_px_for_gaze: int = 80
     calibration_seconds: float = 5.0
@@ -74,6 +81,8 @@ class AttentionConfig:
             window_seconds=settings.ONTASK_WINDOW_SECONDS,
             on_task_floor=settings.ONTASK_FLOOR,
             gaze_blend_weight=settings.GAZE_BLEND_WEIGHT,
+            gaze_yaw_sign=settings.GAZE_YAW_SIGN,
+            gaze_pitch_sign=settings.GAZE_PITCH_SIGN,
             min_face_px=settings.MIN_FACE_PX,
             min_face_px_for_gaze=settings.MIN_FACE_PX_FOR_GAZE,
             calibration_seconds=settings.CALIBRATION_SECONDS,
@@ -148,7 +157,7 @@ class AttentionEngine:
         self.students: dict[int, StudentAttention] = {}
         self._calibrating_until: Optional[float] = None
 
-    # ── Calibration ──────────────────────────────────────────────────────────
+    # ── Calibration ───────────────────────────────────────────────────────────
 
     def start_calibration(self, now: float) -> None:
         """Begin the "everyone look at the board" window."""
@@ -197,7 +206,7 @@ class AttentionEngine:
             roll=0.0,
         )
 
-    # ── Per-frame observation ────────────────────────────────────────────────
+    # ── Per-frame observation ────────────────────────────────────────────
 
     def observe(
         self,
@@ -251,6 +260,8 @@ class AttentionEngine:
             return head_pose.yaw, head_pose.pitch
         w = self.config.gaze_blend_weight
         gaze_yaw, gaze_pitch = gaze
+        gaze_yaw *= self.config.gaze_yaw_sign
+        gaze_pitch *= self.config.gaze_pitch_sign
         return (
             (1.0 - w) * head_pose.yaw + w * gaze_yaw,
             (1.0 - w) * head_pose.pitch + w * gaze_pitch,
@@ -275,7 +286,7 @@ class AttentionEngine:
     def drop(self, track_id: int) -> None:
         self.students.pop(track_id, None)
 
-    # ── Class-level aggregation ──────────────────────────────────────────────
+    # ── Class-level aggregation ──────────────────────────────────────────
 
     def class_metrics(self, now: float, expected_count: Optional[int] = None) -> dict:
         """

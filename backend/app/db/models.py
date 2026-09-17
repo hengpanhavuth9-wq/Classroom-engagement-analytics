@@ -31,7 +31,6 @@ class Session(SQLModel, table=True):
     avg_engagement:    Optional[float] = Field(default=None)
     peak_engagement:   Optional[float] = Field(default=None)
     trough_engagement: Optional[float] = Field(default=None)
-    total_yawn_events: Optional[int]   = Field(default=None)
     max_students_seen: Optional[int]   = Field(default=None)
 
     classroom: Optional[Classroom] = Relationship(back_populates="sessions")
@@ -42,6 +41,9 @@ class AggregatedEngagementMetric(SQLModel, table=True):
     """
     Stores anonymous, class-level engagement snapshots every N seconds.
     NEVER stores individual student data or raw video frames.
+
+    Mirrors AttentionEngine.class_metrics() (see pipeline/engagement_engine.py) —
+    keep the two in sync when the live payload shape changes.
     """
     __tablename__ = "aggregated_engagement_metrics"
 
@@ -50,15 +52,17 @@ class AggregatedEngagementMetric(SQLModel, table=True):
     recorded_at:      datetime      = Field(default_factory=datetime.utcnow, index=True)
 
     # Anonymous aggregate metrics only
-    student_count:    int   = Field(ge=0)
-    class_engagement: float = Field(ge=0.0, le=100.0)
-    engaged_count:    int   = Field(ge=0)
-    yawn_rate:        float = Field(ge=0.0, le=100.0)
+    on_task_ratio:     float = Field(ge=0.0, le=1.0)
+    class_engagement:  float = Field(ge=0.0, le=100.0)
+    student_count:     int   = Field(ge=0)   # faces detected this frame
+    tracked_count:     int   = Field(ge=0)   # students with enough history to score
+    engaged_count:      int  = Field(ge=0)
+    below_floor_count:  int  = Field(ge=0)
 
-    # Emotion distribution (aggregated counts — not per-student)
-    emotion_engaged_happy: int = Field(default=0)
-    emotion_neutral:       int = Field(default=0)
-    emotion_disengaged:    int = Field(default=0)
-    emotion_distressed:    int = Field(default=0)
+    # Attention-state breakdown (aggregated counts — not per-student)
+    on_task_count:   int = Field(default=0)
+    desk_work_count: int = Field(default=0)
+    off_task_count:  int = Field(default=0)
+    unknown_count:   int = Field(default=0)
 
     session: Optional[Session] = Relationship(back_populates="metrics")

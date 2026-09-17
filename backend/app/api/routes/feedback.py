@@ -11,8 +11,10 @@ import csv
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from ..security import require_api_key
 
 router = APIRouter()
 
@@ -35,7 +37,7 @@ class RatingsSubmission(BaseModel):
     segments: list[SegmentRatingIn]
 
 
-@router.post("/ratings", status_code=201)
+@router.post("/ratings", status_code=201, dependencies=[Depends(require_api_key)])
 async def submit_ratings(payload: RatingsSubmission):
     if not payload.segments:
         raise HTTPException(status_code=422, detail="no segments")
@@ -49,13 +51,28 @@ async def submit_ratings(payload: RatingsSubmission):
     _RATINGS_DIR.mkdir(parents=True, exist_ok=True)
     path = _RATINGS_DIR / f"{safe_id}.csv"
 
+    # Merge by (start, end) rather than overwrite: a second submission for
+    # the same session — a different segment rated later, or two reviewers
+    # splitting the lesson — used to silently wipe out the first one's rows.
+    merged: dict[tuple[int, int], list] = {}
+    if path.exists():
+        with path.open(newline="", encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                key = (int(row["segment_start_s"]), int(row["segment_end_s"]))
+                merged[key] = [
+                    safe_id, key[0], key[1], row["rating"], row["confidence"], row["note"],
+                ]
+    for seg in payload.segments:
+        key = (int(seg.segment_start_s), int(seg.segment_end_s))
+        merged[key] = [
+            safe_id, key[0], key[1],
+            seg.rating, seg.confidence, seg.note.replace("\n", " ").strip(),
+        ]
+
     with path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(["session_id", "segment_start_s", "segment_end_s", "rating", "confidence", "note"])
-        for seg in sorted(payload.segments, key=lambda s: s.segment_start_s):
-            writer.writerow([
-                safe_id, int(seg.segment_start_s), int(seg.segment_end_s),
-                seg.rating, seg.confidence, seg.note.replace("\n", " ").strip(),
-            ])
+        for key in sorted(merged):
+            writer.writerow(merged[key])
 
-    return {"saved": f"eval/ratings/{safe_id}.csv", "segments": len(payload.segments)}
+    return {"saved": f"eval/ratings/{safe_id}.csv", "segments": len(merged)}

@@ -27,9 +27,11 @@ services:
 
   frontend:
     image: reli-frontend:latest
-    environment:
-      NEXT_PUBLIC_API_URL: https://reli.yourdomain.com
-      NEXT_PUBLIC_WS_URL:  wss://reli.yourdomain.com
+    # NEXT_PUBLIC_* vars are baked in at `next build` time, not read at
+    # container start — these must instead be passed as build args to
+    # `docker build` (see frontend/Dockerfile) when producing
+    # reli-frontend:latest, with NEXT_PUBLIC_API_TOKEN matching backend's
+    # SECRET_KEY below.
     restart: unless-stopped
 
   redis:

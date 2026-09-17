@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from ...db.database import get_db
 from ...db.models import Classroom
+from ..security import require_api_key
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ class ClassroomResponse(BaseModel):
         from_attributes = True
 
 
-@router.post("/", response_model=ClassroomResponse, status_code=201)
+@router.post("/", response_model=ClassroomResponse, status_code=201, dependencies=[Depends(require_api_key)])
 async def create_classroom(
     payload: ClassroomCreate,
     db: AsyncSession = Depends(get_db),

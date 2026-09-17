@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ...services.redis_service import subscribe_metrics, get_latest_metrics, get_redis
+from ..security import websocket_authorized
 
 router = APIRouter()
 
@@ -11,6 +12,10 @@ async def dashboard_stream(websocket: WebSocket, session_id: str):
     Pushes live engagement metrics to the Next.js teacher dashboard.
     The dashboard client receives only anonymous aggregated class data.
     """
+    if not websocket_authorized(websocket):
+        await websocket.close(code=4401)
+        return
+
     await websocket.accept()
 
     # Send the most recent cached snapshot immediately (avoids blank screen on connect)

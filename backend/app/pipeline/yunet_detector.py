@@ -11,6 +11,7 @@ Ships inside OpenCV >= 4.5.4, so this adds no Python dependency; only the
 """
 import os
 import logging
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -65,13 +66,23 @@ class YuNetDetector:
         self._detector = cv2.FaceDetectorYN.create(
             path, "", (320, 320), score_threshold, nms_threshold, top_k
         )
+        # One YuNet instance is a process-wide singleton shared by every
+        # session (frame_distributor._get_detector). setInputSize() mutates
+        # it, and detect() calls land on the executor's worker threads, so
+        # two sessions streaming at different resolutions concurrently could
+        # race: session A sets 1920x1080, session B sets 640x480 before A's
+        # detect() runs, and A gets B's frame geometry back. detect() itself
+        # is ~1-2ms (YuNet's own benchmark), so serializing it costs far less
+        # than one extra pose/gaze pass would.
+        self._lock = threading.Lock()
         logger.info("[yunet] loaded %s (tiling=%s)", os.path.basename(path), tiling)
 
     def detect(self, frame_bgr: np.ndarray) -> list[FaceDetection]:
         h, w = frame_bgr.shape[:2]
-        if self._tiling:
-            return self._detect_tiled(frame_bgr, w, h)
-        return self._detect_whole(frame_bgr, w, h)
+        with self._lock:
+            if self._tiling:
+                return self._detect_tiled(frame_bgr, w, h)
+            return self._detect_whole(frame_bgr, w, h)
 
     def _detect_whole(self, image: np.ndarray, w: int, h: int) -> list[FaceDetection]:
         if self._input_size != (w, h):

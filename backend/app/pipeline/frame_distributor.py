@@ -43,6 +43,8 @@ _detector: Optional[YuNetDetector] = None
 _gaze_model = None
 _gaze_load_failed = False
 _mp_pipeline: Optional[FacePipelineConfig] = None
+_sixdrepnet_model = None
+_sixdrepnet_load_failed = False
 
 # The worker pool hits these loaders concurrently on the first frame. Without
 # the lock every worker sees `None` and builds its own copy — four MediaPipe
@@ -107,6 +109,29 @@ def _get_gaze_model():
         return _gaze_model
 
 
+def _get_sixdrepnet_model():
+    """Only loaded when settings.HEAD_POSE_BACKEND == "sixdrepnet" — see config.py."""
+    global _sixdrepnet_model, _sixdrepnet_load_failed
+    if _sixdrepnet_model is not None or _sixdrepnet_load_failed:
+        return _sixdrepnet_model
+    with _model_lock:
+        if _sixdrepnet_model is not None or _sixdrepnet_load_failed:
+            return _sixdrepnet_model
+        try:
+            from .head_pose_sixdrepnet import SixDRepNetONNX
+            _sixdrepnet_model = SixDRepNetONNX(
+                margin=settings.SIXDREPNET_CROP_MARGIN,
+                intra_op_threads=settings.ONNX_INTRA_OP_THREADS,
+            )
+        except Exception as exc:
+            _sixdrepnet_load_failed = True
+            logger.warning(
+                "[pipeline] 6DRepNet360 unavailable (%s). "
+                "Set HEAD_POSE_BACKEND=mediapipe or run scripts/fetch_models.py.", exc
+            )
+        return _sixdrepnet_model
+
+
 @dataclass
 class FaceObservation:
     """One student's measurement for one frame, in normalised overlay terms."""
@@ -147,6 +172,12 @@ class FrameDistributor:
 
         detections = await loop.run_in_executor(executor, _get_detector().detect, frame_bgr)
         if not detections:
+            # Still age lost tracks on a blank frame — otherwise a student who
+            # steps out of view (or a camera drop) never ages out of the
+            # tracker or the attention engine, and state_counts keeps
+            # reporting their last-seen state as if it were still current.
+            self.tracker.update([])
+            self._forget_dropped_tracks()
             return []
         detections = sorted(detections, key=lambda d: d.score, reverse=True)[: self.max_faces]
 
@@ -228,15 +259,11 @@ class FrameDistributor:
         self, frame_bgr: np.ndarray, det: FaceDetection, want_gaze: bool
     ) -> tuple[Optional[HeadPose], Optional[tuple[float, float]]]:
         """Runs on a worker thread: head pose always, eye gaze only when budgeted."""
-        pose = None
-        try:
-            crop = _crop_with_margin(frame_bgr, det, margin=0.15)
-            if crop is not None:
-                result = _get_mp_pipeline().process_crop(crop)
-                if result.facial_transformation_matrixes:
-                    pose = pose_from_matrix(result.facial_transformation_matrixes[0])
-        except Exception as exc:
-            logger.debug("[pipeline] head pose failed: %s", exc)
+        pose = (
+            self._pose_sixdrepnet(frame_bgr, det)
+            if settings.HEAD_POSE_BACKEND == "sixdrepnet"
+            else self._pose_mediapipe(frame_bgr, det)
+        )
 
         gaze = None
         if want_gaze:
@@ -250,6 +277,36 @@ class FrameDistributor:
                 logger.debug("[pipeline] eye gaze failed: %s", exc)
 
         return pose, gaze
+
+    def _pose_mediapipe(self, frame_bgr: np.ndarray, det: FaceDetection) -> Optional[HeadPose]:
+        try:
+            crop = _crop_with_margin(frame_bgr, det, margin=0.15)
+            if crop is None:
+                return None
+            result = _get_mp_pipeline().process_crop(crop)
+            if not result.facial_transformation_matrixes:
+                return None
+            return pose_from_matrix(result.facial_transformation_matrixes[0])
+        except Exception as exc:
+            logger.debug("[pipeline] head pose (mediapipe) failed: %s", exc)
+            return None
+
+    def _pose_sixdrepnet(self, frame_bgr: np.ndarray, det: FaceDetection) -> Optional[HeadPose]:
+        try:
+            model = _get_sixdrepnet_model()
+            if model is None:
+                return None
+            result = model.estimate(frame_bgr, det)
+            if result is None:
+                return None
+            return HeadPose(
+                yaw=result.yaw * settings.SIXDREPNET_YAW_SIGN,
+                pitch=result.pitch * settings.SIXDREPNET_PITCH_SIGN,
+                roll=result.roll,
+            )
+        except Exception as exc:
+            logger.debug("[pipeline] head pose (sixdrepnet) failed: %s", exc)
+            return None
 
     def _forget_dropped_tracks(self) -> None:
         live = set(self.engine.students) & set(self.tracker._tracks)

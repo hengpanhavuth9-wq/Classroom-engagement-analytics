@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -6,7 +9,10 @@ from .config import settings
 from .api.routes import sessions, classrooms, analytics, feedback
 from .api.websocket import video_receiver, dashboard_push
 from .services.redis_service import init_redis, close_redis
+from .services.metric_writer import periodic_metric_writer
 from .db.database import init_db
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -14,7 +20,13 @@ async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle manager."""
     await init_redis()
     await init_db()
+    writer_task = asyncio.create_task(periodic_metric_writer())
     yield
+    writer_task.cancel()
+    try:
+        await writer_task
+    except asyncio.CancelledError:
+        pass
     await close_redis()
 
 
