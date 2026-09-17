@@ -39,3 +39,16 @@ backend/recordings/
 backend/annotations/
 backend/eval/out/
 backend/eval/ratings/
+
+# Local SQLite dev DB (see CLAUDE.md "zero-dependency local dev") — was
+# previously committed as backend/reli_dev.db, a snapshot of a schema that
+# has since changed; `create_all` can't alter an existing table, so a
+# committed copy just meant a stale DB shadowing whatever schema the code
+# actually expects on the next clone.
+backend/*.db
+backend/*.db-journal
+
+# Python virtual envs made directly under backend/ (e.g. `python -m venv .venv`
+# from within backend/), on top of the repo-root patterns above.
+backend/.venv/
+backend/venv/
