@@ -40,8 +40,13 @@ Weights are gitignored. Run `python scripts/fetch_models.py` once per clone.
 | MediaPipe FaceLandmarker | `backend/app/pipeline/face_landmarker.task` | **Auto-downloads** (~6 MB) on first run |
 | YuNet face detector | `backend/models/face-detection/face_detection_yunet_2023mar.onnx` | `fetch_models.py`, from opencv_zoo (~230 KB) |
 | Eye gaze ONNX | `backend/models/gaze-estimation/weights/resnet34_gaze.onnx` | `fetch_models.py`, from [yakhyo/gaze-estimation](https://github.com/yakhyo/gaze-estimation) |
+| 6DRepNet360 head pose (opt-in, `HEAD_POSE_BACKEND=sixdrepnet`) | `backend/app/pipeline/weights/sixdrepnet360_Nx3x224x224.onnx` | `fetch_models.py --with-sixdrepnet` only — not in the default set (90 MB, unverified against this project's footage) |
 
 Models are lazy-loaded behind a lock (the worker pool hits the loaders concurrently on the first frame), and a load failure is cached rather than retried per face. A missing gaze model degrades to head pose only — it never falls back to scoring students as engaged.
+
+## Auth
+
+Every REST write and both WebSockets require `Authorization: Bearer <SECRET_KEY>` / `?token=<SECRET_KEY>` respectively — see `backend/app/api/security.py`. A shared placeholder token, not per-account auth. Frontend reads it from `NEXT_PUBLIC_API_TOKEN`.
 
 ## Architecture
 
@@ -56,13 +61,13 @@ Models are lazy-loaded behind a lock (the worker pool hits the loaders concurren
 
 - Next.js 14 App Router (`/`, `/teacher`, `/admin`).
 - **Demo mode available**: `SessionSetup` offers "Demo Mode" that simulates metrics client-side without any backend — useful for UI development.
-- The `CameraClient` (`frontend/src/lib/cameraClient.ts`) captures at the camera's real resolution (1080p by default), 2 FPS, JPEG quality 0.8, over WebSocket to `/ws/video/{session_id}`. `calibrate()` sends `{"action":"calibrate"}` to start the per-student reference capture.
-- The dashboard components have **not** been migrated off the old emotion/yawn payload yet.
+- The `CameraClient` (`frontend/src/lib/cameraClient.ts`) captures at the camera's real resolution (1080p by default), 2 FPS, JPEG quality 0.8, over WebSocket to `/ws/video/{session_id}`. `calibrate()` sends `{"action":"calibrate"}` to start the per-student reference capture. A pipeline error/unauthorized close from the backend surfaces via an `onPipelineError` callback rather than leaving the "Camera + AI active" badge lying.
+- Dashboard components are on the current gaze-only payload (`on_task_ratio`, `state_counts`, …) end to end, including persistence (`AggregatedEngagementMetric`).
 - Store: Zustand (`useEngagementStore`) holds metrics, history (rolling 60 items), alerts, connection state.
 
 ## Testing quirks
 
-- Four test files in `backend/tests/`: `test_head_pose.py`, `test_tracker.py`, `test_attention_engine.py`, `test_frame_distributor.py`.
+- Five test files in `backend/tests/`: `test_head_pose.py`, `test_tracker.py`, `test_attention_engine.py`, `test_frame_distributor.py`, `test_eval_tuning.py`.
 - Pure unit tests — no DB, no Redis, no model weights. The distributor tests stub the detector and `_analyse_face`.
 - No frontend tests exist.
 

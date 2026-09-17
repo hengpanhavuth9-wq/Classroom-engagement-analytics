@@ -81,15 +81,56 @@ Weights are gitignored, not vendored. Run `python scripts/fetch_models.py` once 
 
 Both ONNX models are lazy-loaded and a load failure is cached, not retried per face. When the gaze model is missing the pipeline runs on head pose alone and says so — it does **not** fall back to scoring students as engaged.
 
-## Known wiring gaps
+## Auth
 
-Real dead ends in the current code, not things to "fix by accident" — check whether the task actually calls for wiring them up:
+Every route and both WebSockets require a shared bearer token (see
+`backend/app/api/security.py`), checked against `SECRET_KEY`: REST via
+`Authorization: Bearer <token>` (`Depends(require_api_key)` on mutating
+routes only — GETs stay open), WebSockets via `?token=<token>` (the browser
+WS API can't set headers). This is a placeholder — one token for every
+teacher — not real per-account auth; see the module docstring. The frontend
+reads it from `NEXT_PUBLIC_API_TOKEN` (`lib/api.ts: wsToken()`); Docker Compose
+wires the same value into both services' env (`infra/docker-compose.yml`).
 
-- **The frontend still expects the old payload.** `types.ts`, `teacher/page.tsx`, `EmotionPulse.tsx` and `useGazeOverlay.ts` read `yawn_rate`, `emotion_distribution` and `faces[].emotion`, none of which the pipeline emits any more. The live dashboard shows blanks until the gaze-only rewrite lands. The offline eval harness is unaffected.
-- **`periodic_metric_writer` is never started** — nothing in `main.py`'s lifespan launches it and no `active_sessions` set exists, so nothing is persisted to `aggregated_engagement_metrics`. Its `_unpack_emotions()` also expects emotion keys the pipeline no longer emits, and `AggregatedEngagementMetric` still has emotion/yawn columns.
-- **Alerts never reach the browser**: [alert_service](backend/app/services/alert_service.py) publishes to `alerts:{session_id}`, but `dashboard_push` only subscribes to `channel:session:{session_id}`. The frontend socket handler does look for `type === 'low_engagement'` on that channel.
-- **Frontend Dockerfile** has the `.next/static` and `public` copies commented out, so the standalone production image serves no CSS/assets.
-- **`reli_dev.db` predates the gaze-only schema.** There is no migration tooling, and `create_all` will not alter an existing table, so the DB file has to be recreated when the metric columns change.
+## Optional: 6DRepNet360 head pose
+
+`config.py: HEAD_POSE_BACKEND` defaults to `"mediapipe"`. Setting it to
+`"sixdrepnet"` swaps the yaw/pitch/roll source to a dedicated head-pose model
+(`pipeline/head_pose_sixdrepnet.py`, ONNX export of thohemp/6DRepNet360 via
+PINTO_model_zoo) instead of repurposing FaceLandmarker's transformation
+matrix. Fetch its weights with `python scripts/fetch_models.py
+--with-sixdrepnet` (not in the default set — it's a 90 MB opt-in). Its own
+sign convention is unverified (`SIXDREPNET_YAW_SIGN` / `SIXDREPNET_PITCH_SIGN`
+in `config.py`), same as the MediaPipe path's — run `eval/verify_pose_signs.py`
+against real footage before trusting either over the other; see
+`ENGAGEMENT-MODEL-DECISIONS.md` §4.
+
+## Previously known wiring gaps — now fixed
+
+These were real dead ends; kept here so the fix is traceable, not because
+they're still open:
+
+- **Frontend/backend payload mismatch, `periodic_metric_writer` never
+  started, alerts routed to a channel nobody subscribed to, `reli_dev.db`
+  stale/committed** — all fixed together: the pipeline's actual gaze-only
+  payload (`on_task_ratio`, `state_counts`, …) now flows end to end through
+  `AggregatedEngagementMetric` (`db/models.py`), `periodic_metric_writer`
+  (queries `Session.is_active` directly — no external set to wire), and
+  `alert_service` (publishes on the same `session_channel()` the dashboard
+  already subscribes to, and only once ≥1 student is tracked — see
+  `ENGAGEMENT-MODEL-DECISIONS.md` §5 row 16). `reli_dev.db` is gitignored,
+  not committed.
+- **Frontend Dockerfile** now copies `.next/static` and `public` (the latter
+  needed a `frontend/public/.gitkeep` — Next's standalone output expects the
+  directory to exist even with nothing in it).
+- **The video WebSocket's backpressure never actually dropped frames**
+  (`if processing: continue` could never trigger) — replaced with a
+  reader-task/latest-frame pattern in `video_receiver.py`; see its docstring.
+  `cameraClient.ts`'s capture rate is back to ~2 FPS to match
+  `TRACK_MAX_LOST_FRAMES` / `EMA_ALPHA` / `eval/run_eval.py`'s default, all
+  tuned assuming that rate — the live preview itself is unaffected (`<video>`
+  renders the stream directly; the interval only governs the analysis
+  send rate).
 
 ## Frontend notes
 
